@@ -1,0 +1,29 @@
+---
+- name: install runit
+  apt: name=runit state=present
+
+- name: create user home directories
+  file: path=~/{{ item[0] }} state=directory
+  become_user: "{{ item[1] }}"
+  with_nested:
+    - ["service", "sv"]
+    - "{{ runit_users }}"
+
+- name: create user service directory
+  file: path=/etc/sv/runsvdir-{{ item }} state=directory
+  with_items: "{{ runit_users }}"
+
+- name: register user homedir
+  shell: "getent passwd {{ item }} | cut -d: -f6"
+  with_items: "{{ runit_users }}"
+  register: user_homedir
+  changed_when: false
+
+- name: create user service script
+  template: src=runsvdir-user/run.j2 dest=/etc/sv/runsvdir-{{ item.item }}/run mode=a+x
+  with_items:
+    - "{{ user_homedir.results }}"
+
+- name: activate user service
+  file: src=/etc/sv/runsvdir-{{ item }} dest=/etc/service/runsvdir-{{ item }} state=link
+  with_items: "{{ runit_users }}"
